@@ -4,6 +4,7 @@ import type { AuthProfileStore } from "../agents/auth-profiles/types.js";
 import { formatCliCommand } from "../cli/command-format.js";
 import { collectDurableServiceEnvVars } from "../config/state-dir-dotenv.js";
 import type { OpenClawConfig } from "../config/types.js";
+import { resolveSecretInputRef } from "../config/types.secrets.js";
 import { resolveGatewayLaunchAgentLabel } from "../daemon/constants.js";
 import { resolveGatewayProgramArguments } from "../daemon/program-args.js";
 import { buildServiceEnvironment } from "../daemon/service-env.js";
@@ -99,6 +100,45 @@ async function collectAuthProfileServiceEnvVars(params: {
   }
 
   return entries;
+}
+
+function collectChannelSecretRefServiceEnvVars(params: {
+  env: Record<string, string | undefined>;
+  config?: OpenClawConfig;
+  warn?: DaemonInstallWarnFn;
+}): Record<string, string> {
+  const discordTokenConfig = params.config?.channels?.discord?.token;
+  if (discordTokenConfig === undefined) {
+    return {};
+  }
+
+  const { ref } = resolveSecretInputRef({
+    value: discordTokenConfig,
+    defaults: params.config?.secrets?.defaults,
+  });
+  if (!ref || ref.source !== "env") {
+    return {};
+  }
+
+  const key = normalizeEnvVarKey(ref.id, { portable: true });
+  if (!key) {
+    return {};
+  }
+
+  if (isDangerousHostEnvVarName(key) || isDangerousHostEnvOverrideVarName(key)) {
+    params.warn?.(
+      `Discord channel env ref "${key}" blocked by host-env security policy`,
+      "Discord",
+    );
+    return {};
+  }
+
+  const value = params.env[key]?.trim();
+  if (!value) {
+    return {};
+  }
+
+  return { [key]: value };
 }
 
 function mergeServicePath(
@@ -224,6 +264,11 @@ async function buildGatewayInstallEnvironment(params: {
     ...collectDurableServiceEnvVars({
       env: params.env,
       config: params.config,
+    }),
+    ...collectChannelSecretRefServiceEnvVars({
+      env: params.env,
+      config: params.config,
+      warn: params.warn,
     }),
     ...(await collectAuthProfileServiceEnvVars({
       env: params.env,

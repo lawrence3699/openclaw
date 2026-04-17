@@ -369,6 +369,35 @@ describe("buildGatewayInstallPlan", () => {
     expect(plan.environment.ANTHROPIC_TOKEN).toBe("ant-test-token");
   });
 
+  it("merges the Discord default token env ref into the service environment", async () => {
+    mockNodeGatewayPlanFixture({
+      serviceEnvironment: {
+        OPENCLAW_PORT: "3000",
+      },
+    });
+
+    const plan = await buildGatewayInstallPlan({
+      env: {
+        DISCORD_BOT_TOKEN: "discord-token", // pragma: allowlist secret
+      },
+      port: 3000,
+      runtime: "node",
+      config: {
+        channels: {
+          discord: {
+            token: {
+              source: "env",
+              provider: "default",
+              id: "DISCORD_BOT_TOKEN",
+            },
+          },
+        },
+      },
+    });
+
+    expect(plan.environment.DISCORD_BOT_TOKEN).toBe("discord-token");
+  });
+
   it("blocks dangerous auth-profile env refs from the service environment", async () => {
     mockNodeGatewayPlanFixture({
       serviceEnvironment: {
@@ -467,6 +496,31 @@ describe("buildGatewayInstallPlan", () => {
     });
 
     expect(plan.environment.OPENAI_API_KEY).toBeUndefined();
+  });
+
+  it("merges env-backed channel SecretRefs into the service environment", async () => {
+    mockNodeGatewayPlanFixture({
+      serviceEnvironment: {
+        OPENCLAW_PORT: "3000",
+      },
+    });
+
+    const plan = await buildGatewayInstallPlan({
+      env: {
+        DISCORD_BOT_TOKEN: "discord-bot-token",
+      },
+      port: 3000,
+      runtime: "node",
+      config: {
+        channels: {
+          discord: {
+            token: { source: "env", provider: "default", id: "DISCORD_BOT_TOKEN" },
+          },
+        },
+      },
+    });
+
+    expect(plan.environment.DISCORD_BOT_TOKEN).toBe("discord-bot-token");
   });
 });
 
