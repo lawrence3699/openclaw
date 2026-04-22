@@ -55,6 +55,10 @@ import {
 } from "./monitor-websocket.js";
 import { runWithReconnect } from "./reconnect.js";
 import { deliverMattermostReplyPayload } from "./reply-delivery.js";
+import {
+  sanitizeMattermostDraftPreviewText,
+  shouldSuppressMattermostReasoningReply,
+} from "./reply-reasoning.js";
 import type {
   ChannelAccountSnapshot,
   ChatType,
@@ -288,7 +292,7 @@ type MattermostDraftPreviewDeliverParams = {
 export async function deliverMattermostReplyWithDraftPreview(
   params: MattermostDraftPreviewDeliverParams,
 ): Promise<void> {
-  if (params.payload.isReasoning) {
+  if (shouldSuppressMattermostReasoningReply(params.payload)) {
     return;
   }
 
@@ -1682,7 +1686,7 @@ export async function monitorMattermostProvider(opts: MonitorMattermostOpts = {}
         };
 
         const updateDraftFromPartial = (text?: string) => {
-          const cleaned = text?.trim();
+          const cleaned = sanitizeMattermostDraftPreviewText(text);
           if (!cleaned) {
             return;
           }

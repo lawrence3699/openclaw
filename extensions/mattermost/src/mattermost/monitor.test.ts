@@ -20,6 +20,7 @@ import {
   type MattermostMentionGateInput,
   type MattermostRequireMentionResolverInput,
 } from "./monitor.js";
+import { sanitizeMattermostDraftPreviewText } from "./reply-reasoning.js";
 
 function resolveRequireMentionForTest(params: MattermostRequireMentionResolverInput): boolean {
   const root = params.cfg.channels?.mattermost;
@@ -251,6 +252,50 @@ describe("shouldClearMattermostDraftPreview", () => {
 });
 
 describe("deliverMattermostReplyWithDraftPreview", () => {
+  it("suppresses reasoning-prefixed finals before preview finalization", async () => {
+    const draftStream = createDraftStreamMock();
+    const deliverFinal = vi.fn(async () => {});
+
+    await deliverMattermostReplyWithDraftPreview({
+      payload: { text: " Reasoning:\n_hidden_", replyToId: "child-post-789" } as never,
+      info: { kind: "final" },
+      client: createMattermostClientMock(),
+      draftStream,
+      effectiveReplyToId: "thread-root-456",
+      resolvePreviewFinalText: (text) => text?.trim(),
+      previewState: { finalizedViaPreviewPost: false },
+      logVerboseMessage: vi.fn(),
+      deliverFinal,
+    });
+
+    expect(draftStream.flush).not.toHaveBeenCalled();
+    expect(draftStream.stop).not.toHaveBeenCalled();
+    expect(updateMattermostPostSpy).not.toHaveBeenCalled();
+    expect(deliverFinal).not.toHaveBeenCalled();
+  });
+
+  it("suppresses tag-only reasoning finals before preview finalization", async () => {
+    const draftStream = createDraftStreamMock();
+    const deliverFinal = vi.fn(async () => {});
+
+    await deliverMattermostReplyWithDraftPreview({
+      payload: { text: "<think>still hidden</think>", replyToId: "child-post-789" } as never,
+      info: { kind: "final" },
+      client: createMattermostClientMock(),
+      draftStream,
+      effectiveReplyToId: "thread-root-456",
+      resolvePreviewFinalText: (text) => text?.trim(),
+      previewState: { finalizedViaPreviewPost: false },
+      logVerboseMessage: vi.fn(),
+      deliverFinal,
+    });
+
+    expect(draftStream.flush).not.toHaveBeenCalled();
+    expect(draftStream.stop).not.toHaveBeenCalled();
+    expect(updateMattermostPostSpy).not.toHaveBeenCalled();
+    expect(deliverFinal).not.toHaveBeenCalled();
+  });
+
   it("deletes the preview after a successful normal final send", async () => {
     const draftStream = createDraftStreamMock();
     const deliverFinal = vi.fn(async () => {});
@@ -349,6 +394,22 @@ describe("deliverMattermostReplyWithDraftPreview", () => {
       "preview-post-1",
       expect.objectContaining({ message: "↓ See below." }),
     );
+  });
+});
+
+describe("sanitizeMattermostDraftPreviewText", () => {
+  it("suppresses pure reasoning preview text", () => {
+    expect(sanitizeMattermostDraftPreviewText("  \nReasoning:\n_hidden_")).toBeUndefined();
+  });
+
+  it("strips hidden reasoning tags before preview updates", () => {
+    expect(sanitizeMattermostDraftPreviewText("<think>secret</think>Visible answer")).toBe(
+      "Visible answer",
+    );
+  });
+
+  it("suppresses tag-only reasoning blocks from preview updates", () => {
+    expect(sanitizeMattermostDraftPreviewText("<think>still hidden</think>")).toBeUndefined();
   });
 });
 

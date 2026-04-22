@@ -2,6 +2,7 @@ import {
   deliverTextOrMediaReply,
   resolveSendableOutboundReplyParts,
 } from "openclaw/plugin-sdk/reply-payload";
+import { shouldSuppressMattermostReasoningReply } from "./reply-reasoning.js";
 import {
   getAgentScopedMediaLocalRoots,
   type OpenClawConfig,
@@ -35,6 +36,9 @@ export async function deliverMattermostReplyPayload(params: {
   tableMode: MarkdownTableMode;
   sendMessage: SendMattermostMessage;
 }): Promise<void> {
+  if (shouldSuppressMattermostReasoningReply(params.payload)) {
+    return;
+  }
   const reply = resolveSendableOutboundReplyParts(params.payload, {
     text: params.core.channel.text.convertMarkdownTables(
       params.payload.text ?? "",

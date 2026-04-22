@@ -38,6 +38,69 @@ function createReplyDeliveryCore(): DeliverMattermostReplyPayloadParams["core"] 
 }
 
 describe("deliverMattermostReplyPayload", () => {
+  it("suppresses explicit reasoning payloads", async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const cfg = {} satisfies OpenClawConfig;
+    const core = createReplyDeliveryCore();
+
+    await deliverMattermostReplyPayload({
+      core,
+      cfg,
+      payload: { text: "Reasoning:\n_hidden_", isReasoning: true },
+      to: "channel:town-square",
+      accountId: "default",
+      agentId: "agent-1",
+      replyToId: "root-post",
+      textLimit: 4000,
+      tableMode: "off",
+      sendMessage,
+    });
+
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("suppresses reasoning-prefixed payloads even without an explicit flag", async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const cfg = {} satisfies OpenClawConfig;
+    const core = createReplyDeliveryCore();
+
+    await deliverMattermostReplyPayload({
+      core,
+      cfg,
+      payload: { text: "  \n Reasoning:\n_hidden_" },
+      to: "channel:town-square",
+      accountId: "default",
+      agentId: "agent-1",
+      replyToId: "root-post",
+      textLimit: 4000,
+      tableMode: "off",
+      sendMessage,
+    });
+
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("suppresses tag-only reasoning payloads", async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const cfg = {} satisfies OpenClawConfig;
+    const core = createReplyDeliveryCore();
+
+    await deliverMattermostReplyPayload({
+      core,
+      cfg,
+      payload: { text: "<think>still hidden</think>" },
+      to: "channel:town-square",
+      accountId: "default",
+      agentId: "agent-1",
+      replyToId: "root-post",
+      textLimit: 4000,
+      tableMode: "off",
+      sendMessage,
+    });
+
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
   it("passes agent-scoped mediaLocalRoots when sending media paths", async () => {
     const previousStateDir = process.env.OPENCLAW_STATE_DIR;
     const stateDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-mm-state-"));
